@@ -18,7 +18,7 @@ function coeffs = stencil_coefficients(J,a,b,c,d,e,dxi,deta,nodes)
     N = -(c/deta^2 + d/(2*deta))./(J.^2);
     NE = SW;
     
-    % Vectorize stencil coefficients, vertiacally stack rows 
+    % Vectorize stencil coefficients, vertically stack rows 
     % of contant eta
     SW = reshape(SW',nodes,1);
     S = reshape(S',nodes,1);
