@@ -1,6 +1,9 @@
 % -------------------------------------------------------------------
 % Patrick Heng
-% 15 Feb 2025 - 3 Mar 2025
+% 15 Feb 2025 - 6 Apr 2025
+% Script to generate data for error convergence study of CUT solution
+% algorithm.
+% -------------------------------------------------------------------
 % Script to solve the PFR boundary value problem using a non-linear 
 % finite volume scheme.
 % Uses the CUT loop to solve the coupled transport problems:
@@ -18,8 +21,6 @@ close all; clear all; clc;
 cA0 = 18.8;
 
 % Initial concentrations of other species (mol/m^3)
-% i = 1        2       3        4
-%     Acetone  Ketene  Methane  Nitrogen (inert)
 c0 = [cA0;0;0;0];
 
 % Initial temperature, T0 (K)
@@ -34,7 +35,7 @@ L = 5;
 % PFR velocity, U (m/s)
 U0 = 2;
 
-% Stoichiometric coefficients [a,b,c,d]
+% Stoichiometric coefficients [a,b,c]
 stoich = [-1;1;1;0];
 
 % Molecular weights (kg/mol), 
@@ -83,13 +84,11 @@ mu = 30*1e-6;
 % ----- SOLVER -----
 
 % --- SOLVER PARAMETERS ---
-% Number of nodes to solve for
-nodes = 500;
 
 % Error tolerance for relative residuals, generally, anything below 
 % 1e-6 is not recommended as it leads to oscillations in the iterations
 % without further convergence
-rel_tol = 1e-8;
+rel_tol = 1e-10;
 
 % Max number of iterations for each time step
 max_iter = 25;
@@ -109,12 +108,6 @@ newton_tol = 0;
 % functions look visually smoother; introduces a small amount of error.
 % However, by the mean value theorem, this error vanishes as dz -> 0.
 smoothed_output = false;     
-
-% Relaxation factors, 0.6 is good for many cases with a 1e-6 rel_tol,
-% but they can be any number between 0 and 1
-RFCA = 0.6;           % CA relaxation factor
-RFT = RFCA;           % theta relaxation factor
-RFU = RFCA;           % U relaxation factor
 
 % Time step sizes
 dt = Inf;
@@ -144,31 +137,18 @@ Gamma = cA0*(Href - TCp_ref)/(K*T0);  % Dimensionless reference enthalpy
 N = h*L/(K*U0);                       % Number of transfer units
 epsilon = -sum(stoich)*cA0/(sum(c0)*stoich(1));  % Change in moles of rxn
 
-% Generate a uniform computational mesh
-z = linspace(0,1,nodes);
-
-% Spatial finite difference
-dz = z(2) - z(1);
 
 % Store parameters in structure for easy usage in functions
 params = struct('cA0',cA0,'T0',T0,'Ta',Ta,'stoich',stoich, ...
                 'rho_0',rho_0,'THETA',THETA,'K',K,'p0',p0,'MW',MW, ...
                 'Pe_M',Pe_M,'Pe_T',Pe_T,'Da',Da,'Re',Re,'Eu',Eu, ...
                 'beta',beta,'Gamma',Gamma,'N',N,'epsilon',epsilon, ...
-                'a1',a1,'a2',a2,'a3',a3,'dz',dz,'dt',dt,'nodes',nodes);
+                'a1',a1,'a2',a2,'a3',a3,'dz',1,'dt',dt,'nodes',1);
 
 % --- SOLUTION INITIALIZATION ---
 % Maximum number of time steps
 t = 1:max_time_iter;
 
-% Initial guess for CA, assume an exponential curve
-CA = (1-exp(-z))';
-
-% Initial guess for theta, assume constant
-theta = ones(nodes,1);
-
-% Initial guess for U, assume constant
-U = ones(nodes,1);
 
 % Predict Jacobian sparsity pattern for non-linear solver
 if newton_tol ~= 0 
@@ -196,15 +176,51 @@ Non_Linear_Solves = 0;
 % Start with fixed point iteration to establish convergence
 newton = false;
 
-% Preallocate residual histories
-err_CA = zeros(max_time_iter,1);
-err_U = zeros(max_time_iter,1);
-err_T = zeros(max_time_iter,1);
 
 
 % -------------------------------------------------------------------
 % ----- ITERATIVE SOLVER -----
 tic
+
+for k = 2.^(4:20)
+    % Number of nodes to solve for
+    nodes = k;
+
+    % Preallocate residual histories
+    err_CA = zeros(max_time_iter,1);
+    err_U = zeros(max_time_iter,1);
+    err_T = zeros(max_time_iter,1);
+
+    % Generate a uniform computational mesh
+    z = linspace(0,1,nodes);
+    
+    % Spatial finite difference
+    dz = z(2) - z(1);
+
+    params.dz = dz;
+    params.nodes = nodes;
+
+    % Initial guess for CA, assume an exponential curve
+    CA = (1-exp(-z))';
+    
+    % Initial guess for theta, assume an exponential curve
+    %theta = 0.2*(1+exp(-z))';
+    theta = ones(nodes,1);
+    
+    % Initial guess for U, assume an exponential curve
+    U = ones(nodes,1);
+    
+    % Relaxation factors, 0.6 is good for many cases with a 1e-6 rel_tol,
+    % but they can be any number between 0 and 1
+    %if nodes < 50
+        RFCA = 0.3;           % CA relaxation factor
+    %else
+    %    RFCA = 0.6;
+    %end
+    RFT = RFCA;           % theta relaxation factor
+    RFU = RFCA;           % U relaxation factor
+
+
 for i = t
     if newton == false      % Linearized fixed point iteration
         
@@ -327,108 +343,8 @@ for i = t
     end
     
 end
-toc
-
-% -------------------------------------------------------------------
-% ----- POST PROCESSING -----
-
-% Return the correct sized residual histories
-err_CA = nonzeros(err_CA);
-err_U = nonzeros(err_U);
-err_T = nonzeros(err_T);
-
-% Perform Gaussian averaging on the internal nodes of the outputs, 
-% leaves the boundary nodes as is
-if smoothed_output == true
-    DD = (1/4)*spdiags([ones(nodes,1), 2*ones(nodes,1), ones(nodes,1)],...
-                                [-1,0,1],nodes,nodes);
-    DD(1,:) = 0; DD(1,1) = 1; DD(nodes,:) = 0; DD(nodes,nodes) = 1;
-    X = DD*X;
-    U = DD*U;
-    theta = DD*theta;
+    % Save the mesh information and solution field
+    X = 1 - U.* CA;
+    save(['sol_' num2str(k) '.mat'], 'z','CA','U','theta','X','dz')
 end
-
-% Clear excess variables
-%clear R kappa D Ea Href Pe_M Pe_T Da Re K N Ta rho_0 mu TCp_ref
-%clear T0 dCp Cp Gamma F dt_CA dt_T a1 a2 a3 c0 h MW 
-
-% --- PLOT X, THETA, U, P, IN NON-DIMENSIONALIZED COORDINATES ---
-figure
-yyaxis left
-X = 1 - U.*CA;
-plot(z,X,linewidth=2, color='b')            % Plot X
-ylabel('$X$',interpreter='latex')
-set(gca,'YColor','b')
-ylim([0,1])
-
-yyaxis right
-plot(z,theta,linewidth=2, color='r')        % Plot theta
-ylabel('$\theta,\ U$',interpreter='latex')
-set(gca,'YColor','k')
-
-hold on
-plot(z,U,linewidth=2, color=[1,180,40]/256,linestyle='-')   % Plot U
-
-
-% Pretty plot  parameters
-xlabel('$z$',interpreter='latex'); 
-legend('$X$','$\theta$','$U$', interpreter='latex', location='best')
-
-grid on; box on
-fontname('Serif'); fontsize(16,'points');
-
-
-% --- PLOT CONCENTRATION PROFILES ---
-figure
-c_A = cA0*(1-X)./U;
-c_B = cA0*(THETA(2)-stoich(2)*X/stoich(1))./U;
-c_C = cA0*(THETA(3)-stoich(3)*X/stoich(1))./U;
-
-hold on
-plot(L*z',c_A,linewidth=2,color='b')
-plot(L*z',c_B,linewidth=2,color=[1,180,40]/256)
-plot(L*z',c_C,linewidth=2,color='r')
-
-% Pretty plot  parameters
-xlabel('$x$ (m)',interpreter='latex'); 
-ylabel('$c_A$, $c_B$, $c_C$ (mol/m$^3$)',interpreter='latex');
-legend('$c_A$', '$c_B$', '$c_C$',interpreter='latex', location='best')
-
-grid on; box on
-fontname('Serif'); fontsize(16,'points');
-
-% --- PLOT REACTION RATE PROFILE ---
-figure
-rate = k0*cA0*exp(beta./theta).*CA;
-
-plot(L*z',rate,linewidth=2,color='b')
-
-% Pretty plot  parameters
-xlabel('$x$ (m)',interpreter='latex'); 
-ylabel('$-r_A$ (mol/m$^3$/s)',interpreter='latex');
-grid on; box on
-fontname('Serif'); fontsize(16,'points');
-
-
-% --- PLOT RESIDUALS ---
-figure
-semilogy(err_CA,linewidth=2,color='b')      % CA error
-
-hold on
-semilogy(err_T,linewidth=2,color='r')       % Theta error
-
-semilogy(err_U,linewidth=2,color=[1,180,40]/256)    % U error
-
-% Plot order of convergence
-k = size(err_T,1);
-semilogy(1:k,2.^-(1:k), linewidth=2, linestyle='--', color='k')
-
-% Pretty plot parameters
-set(gca,'YColor','k')
-xlabel('Iterations, $k$',interpreter='latex')
-ylabel('$r_X,\ r_\theta,\ r_U$',interpreter='latex')
-legend('$r_X$', '$r_\theta$', '$r_U$', '$O(k)$', ...
-    interpreter='latex', location='southwest')
-
-grid on; box on
-fontname('Serif'); fontsize(16,'points');
+toc
