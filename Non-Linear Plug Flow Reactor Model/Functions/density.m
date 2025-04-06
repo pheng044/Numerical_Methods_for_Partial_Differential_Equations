@@ -1,6 +1,6 @@
 % -------------------------------------------------------------------
 % Patrick Heng
-% 3 Mar 2025
+% 15 Feb 2025 - 6 Apr 2025
 % Calculate density field for non-dimensionalized PFR equation
 % -------------------------------------------------------------------
 
@@ -13,6 +13,7 @@ function rho = density(X,theta,P,params)
     epsilon = params.epsilon;
     MW = params.MW;
     rho_0 = params.rho_0;
+
     
     % Calculate, return
     rho = (cA0./(1+epsilon*X)).*(sum(THETA.*MW) ...

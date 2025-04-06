@@ -1,7 +1,8 @@
 % -------------------------------------------------------------------
 % Patrick Heng
-% 3 Mar 2025
-% 1D stencil coefficients for non-dimensionalized PFR equation
+% 15 Feb 2025 - 6 Apr 2025
+% 1D stencil coefficients for non-dimensionalized PFR problem
+%  -> theta equation
 % -------------------------------------------------------------------
 
 function [A,f] = stencil_coefficients_theta(X,U,P,theta,params)
@@ -34,7 +35,7 @@ function [A,f] = stencil_coefficients_theta(X,U,P,theta,params)
 
     % Compute stencil coefficients
     W = -U.*H/(2*dz) - (1/Pe_T)*(1/dz^2);
-    C = H/dt + (1/Pe_T)*(2/dz^2) + Da*exp(beta./theta).*(1-X)...
+    C = H/dt + (1/Pe_T)*(2/dz^2) + Da*exp(beta./theta).*(1-X) ...
         .*(cA0*(stoich'*a1+(stoich'*a2*T0/2)...
         *theta+((1/3)*stoich'*a3*T0^2)*theta.^2)/K)./U + N;
     E = U.*H/(2*dz) - (1/Pe_T)*(1/dz^2);
@@ -50,18 +51,17 @@ function [A,f] = stencil_coefficients_theta(X,U,P,theta,params)
     A(1,:) = 0; A(nodes,:) = 0;
 
     % Left flux boundary
-    A(1,1) = U(1)*H(1) + 3/(2*Pe_T*dz); A(1,2) = -4/(2*Pe_T*dz); 
-    A(1,3) = 1/(2*Pe_T*dz);
-
+    A(1,1) = U(1)*H(1) - 2/(Pe_T*dz);
     % Right flux boundary
-    A(nodes,nodes) = 3/(2*Pe_T*dz); A(nodes,nodes-1) = -4/(2*Pe_T*dz); 
-    A(nodes,nodes-2) = 1/(2*Pe_T*dz);
+    A(nodes,nodes) = 1/dz;
+    A(nodes,nodes-1) = -1/dz;
 
     % Forcing function with appropriate boundary conditions
-    % Internal
+
+    % Internal nodes
     f = H.*theta/dt - Da*exp(beta./theta).*(1-X).*Gamma./U + N*Ta/T0 ...
             + (p0/K/T0)*U.*([P(2:nodes);0]-[0;P(1:nodes-1)])/(2*dz);
-    f(1) = 1;               % Left
-    f(nodes) = 0;           % Right
+    f(1) = 1 - 2/(Pe_T*dz);     % Left
+    f(nodes) = 0;               % Right
 
 end

@@ -1,7 +1,8 @@
 % -------------------------------------------------------------------
 % Patrick Heng
-% 3 Mar 2025
-% 1D stencil coefficients for non-dimensionalized PFR equation
+% 15 Feb 2025 - 6 Apr 2025
+% 1D stencil coefficients for non-dimensionalized PFR problem
+%  -> momentum equation
 % -------------------------------------------------------------------
 
 function [A,f] = stencil_coefficients_U(U,rho,P,params)
@@ -27,18 +28,16 @@ function [A,f] = stencil_coefficients_U(U,rho,P,params)
 
     % Clear boundary rows
     A(1,:) = 0; A(nodes,:) = 0;
-    
+
     % Left flux boundary
-    A(1,1) = rho(1)*U(1) + 3/(2*Re*dz); A(1,2) = -4/(2*Re*dz); 
-    A(1,3) = +1/(2*Re*dz);
-    
+    A(1,1) = rho(1)*U(1) - 2/(Re*dz);
     % Right flux boundary
-    A(nodes,nodes) = -3/(2*Re*dz); A(nodes,nodes-1) = 4/(2*Re*dz); 
-    A(nodes,nodes-2) = -1/(2*Re*dz);
+    A(nodes,nodes) = 1/dz;
+    A(nodes,nodes-1) = -1/dz;
     
     % Forcing function with appropriate boundary conditions
     f = U/dt + Eu*([P(2:nodes);0]-[0;P(1:nodes-1)])/(2*dz); %Internal
-    f(1) = 1;           % Left
-    f(nodes) = 0;       % Right
+    f(1) = 1 - 2/(Re*dz);           % Left
+    f(nodes) = 0;                   % Right
 
 end
